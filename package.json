@@ -1,0 +1,68 @@
+{
+  "name": "open-office-excel",
+  "version": "1.0.0",
+  "description": "A free, local-first Excel alternative for editing .xlsx files",
+  "main": "./out/main/index.js",
+  "author": "open-office-excel",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ELECTRON_RUN_AS_NODE= electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "ELECTRON_RUN_AS_NODE= electron-vite preview",
+    "dist": "npm run build && electron-builder",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test:roundtrip": "node scripts/roundtrip-test.mjs"
+  },
+  "dependencies": {
+    "@univerjs/preset-sheets-core": "^0.10.0",
+    "@univerjs/preset-sheets-data-validation": "^0.10.14",
+    "@univerjs/preset-sheets-filter": "^0.10.14",
+    "@univerjs/presets": "^0.10.0",
+    "exceljs": "^4.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.openofficeexcel.app",
+    "productName": "Open Office Excel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    }
+  }
+}
