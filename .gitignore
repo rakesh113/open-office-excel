@@ -9,3 +9,6 @@ release
 !.vscode/extensions.json
 .idea
 coverage
+.env
+.env.*
+!.env.example
