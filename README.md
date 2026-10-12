@@ -59,7 +59,7 @@ This starts Electron with hot reload. The app window should open automatically.
 
 ### Troubleshooting
 
-If Electron fails with `Cannot read properties of undefined (reading 'whenReady')`, make sure `ELECTRON_RUN_AS_NODE` is unset. Some IDEs set this. The `npm run dev` script clears it automatically.
+If Electron fails with `Cannot read properties of undefined (reading 'whenReady')`, make sure `ELECTRON_RUN_AS_NODE` is unset. Some IDEs set this. `npm run dev` and `npm run preview` clear it on Windows, macOS, and Linux before starting Electron.
 
 ---
 
