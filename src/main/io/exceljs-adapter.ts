@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream'
 import ExcelJS from 'exceljs'
 import {
   CellValueType,
@@ -371,13 +372,21 @@ function isDateStyle(style?: IStyleData): boolean {
   return looksLikeDateNumFmt(style?.n?.pattern)
 }
 
-export async function xlsxBufferToWorkbookData(
-  buffer: Buffer | Uint8Array,
-  fileName?: string
-): Promise<IWorkbookData> {
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(Buffer.from(buffer) as unknown as ExcelJS.Buffer)
+function workbookNameFromFile(fileName?: string): string {
+  if (!fileName) return 'Untitled'
+  return fileName.replace(/\.(xlsx|csv)$/i, '') || 'Untitled'
+}
 
+function stripUtf8Bom(buffer: Buffer): Buffer {
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3)
+  }
+  return buffer
+}
+
+const CSV_DATE_FORMATS = ['YYYY-MM-DD', 'M/D/YYYY', 'MM/DD/YYYY', 'YYYY/MM/DD']
+
+function excelWorkbookToWorkbookData(workbook: ExcelJS.Workbook, fileName?: string): IWorkbookData {
   const styles: Record<string, IStyleData> = {}
   const styleMap = new Map<string, string>()
   let styleCounter = 0
@@ -462,12 +471,12 @@ export async function xlsxBufferToWorkbookData(
   })
 
   if (sheetOrder.length === 0) {
-    return createBlankWorkbookData(fileName?.replace(/\.xlsx$/i, '') || 'Untitled')
+    return createBlankWorkbookData(workbookNameFromFile(fileName))
   }
 
   return {
     id: 'workbook-1',
-    name: fileName?.replace(/\.xlsx$/i, '') || workbook.title || 'Workbook',
+    name: workbookNameFromFile(fileName) || workbook.title || 'Workbook',
     appVersion: '1.0.0',
     locale: 'enUS',
     styles,
@@ -476,7 +485,29 @@ export async function xlsxBufferToWorkbookData(
   }
 }
 
-export async function workbookDataToXlsxBuffer(data: IWorkbookData): Promise<Uint8Array> {
+export async function xlsxBufferToWorkbookData(
+  buffer: Buffer | Uint8Array,
+  fileName?: string
+): Promise<IWorkbookData> {
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(Buffer.from(buffer) as unknown as ExcelJS.Buffer)
+  return excelWorkbookToWorkbookData(workbook, fileName)
+}
+
+export async function csvBufferToWorkbookData(
+  buffer: Buffer | Uint8Array,
+  fileName?: string
+): Promise<IWorkbookData> {
+  const workbook = new ExcelJS.Workbook()
+  const bytes = stripUtf8Bom(Buffer.from(buffer))
+  await workbook.csv.read(Readable.from(bytes), {
+    sheetName: 'Sheet1',
+    dateFormats: CSV_DATE_FORMATS
+  })
+  return excelWorkbookToWorkbookData(workbook, fileName)
+}
+
+function workbookDataToExcelWorkbook(data: IWorkbookData): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Open Office Excel'
   workbook.created = new Date()
@@ -545,8 +576,29 @@ export async function workbookDataToXlsxBuffer(data: IWorkbookData): Promise<Uin
     }
   }
 
+  return workbook
+}
+
+export async function workbookDataToXlsxBuffer(data: IWorkbookData): Promise<Uint8Array> {
+  const workbook = workbookDataToExcelWorkbook(data)
   const buffer = await workbook.xlsx.writeBuffer()
   return new Uint8Array(buffer)
+}
+
+export async function workbookDataToCsvBuffer(data: IWorkbookData): Promise<Uint8Array> {
+  const firstId = data.sheetOrder[0]
+  const firstSheet = firstId ? data.sheets[firstId] : undefined
+  const singleSheet: IWorkbookData = firstSheet
+    ? { ...data, sheetOrder: [firstId], sheets: { [firstId]: firstSheet } }
+    : data
+  const workbook = workbookDataToExcelWorkbook(singleSheet)
+  const sheetName = firstSheet?.name || 'Sheet1'
+  const csv = await workbook.csv.writeBuffer({
+    sheetName,
+    dateFormat: 'YYYY-MM-DD',
+    formatterOptions: { rowDelimiter: '\r\n', writeBOM: true }
+  })
+  return new Uint8Array(csv)
 }
 
 export { createBlankWorkbookData }

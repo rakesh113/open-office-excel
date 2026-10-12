@@ -28,7 +28,7 @@ export interface ElectronAPI {
   writeWorkbook: (
     filePath: string,
     workbook: IWorkbookData
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<{ ok: true } | { ok: false; canceled: true } | { ok: false; error: string }>
   setDocumentEdited: (edited: boolean) => Promise<void>
   setTitle: (title: string) => Promise<void>
   confirmDiscard: () => Promise<boolean>

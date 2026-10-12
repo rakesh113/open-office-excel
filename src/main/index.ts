@@ -3,7 +3,12 @@ import { join } from 'path'
 import { writeFile } from 'fs/promises'
 import { IPC } from '../shared/ipc'
 import type { IWorkbookData } from '../shared/workbook'
-import { workbookDataToXlsxBuffer, xlsxBufferToWorkbookData } from './io/exceljs-adapter'
+import {
+  csvBufferToWorkbookData,
+  workbookDataToCsvBuffer,
+  workbookDataToXlsxBuffer,
+  xlsxBufferToWorkbookData
+} from './io/exceljs-adapter'
 import { readFile } from 'fs/promises'
 
 let mainWindow: BrowserWindow | null = null
@@ -146,13 +151,32 @@ function buildMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+function isCsvPath(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith('.csv')
+}
+
+function isXlsxPath(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith('.xlsx')
+}
+
+function saveFilters(defaultName?: string): Electron.FileFilter[] {
+  const xlsx = { name: 'Excel Workbook', extensions: ['xlsx'] }
+  const csv = { name: 'CSV', extensions: ['csv'] }
+  if (defaultName && isCsvPath(defaultName)) return [csv, xlsx]
+  return [xlsx, csv]
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.OPEN_FILE, async () => {
     if (!mainWindow) return { canceled: true as const }
 
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open Spreadsheet',
-      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
+      filters: [
+        { name: 'Spreadsheets', extensions: ['xlsx', 'csv'] },
+        { name: 'Excel Workbook', extensions: ['xlsx'] },
+        { name: 'CSV', extensions: ['csv'] }
+      ],
       properties: ['openFile']
     })
 
@@ -163,7 +187,15 @@ function registerIpc(): void {
     const filePath = result.filePaths[0]
     try {
       const buffer = await readFile(filePath)
-      const workbook = await xlsxBufferToWorkbookData(buffer, filePath.split(/[/\\]/).pop())
+      const fileName = filePath.split(/[/\\]/).pop()
+      let workbook
+      if (isCsvPath(filePath)) {
+        workbook = await csvBufferToWorkbookData(buffer, fileName)
+      } else if (isXlsxPath(filePath)) {
+        workbook = await xlsxBufferToWorkbookData(buffer, fileName)
+      } else {
+        throw new Error('Open an .xlsx or .csv file.')
+      }
       return {
         canceled: false as const,
         path: filePath,
@@ -186,7 +218,7 @@ function registerIpc(): void {
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Spreadsheet',
       defaultPath: defaultName ?? 'Untitled.xlsx',
-      filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
+      filters: saveFilters(defaultName)
     })
 
     if (result.canceled || !result.filePath) {
@@ -194,8 +226,8 @@ function registerIpc(): void {
     }
 
     let filePath = result.filePath
-    if (!filePath.toLowerCase().endsWith('.xlsx')) {
-      filePath = `${filePath}.xlsx`
+    if (!isXlsxPath(filePath) && !isCsvPath(filePath)) {
+      filePath = `${filePath}${defaultName && isCsvPath(defaultName) ? '.csv' : '.xlsx'}`
     }
 
     return { canceled: false as const, path: filePath }
@@ -203,7 +235,27 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.WRITE_WORKBOOK, async (_event, filePath: string, workbook: IWorkbookData) => {
     try {
-      const data = await workbookDataToXlsxBuffer(workbook)
+      let data: Uint8Array
+      if (isCsvPath(filePath)) {
+        const sheets = workbook.sheetOrder.filter((id) => workbook.sheets[id])
+        if (sheets.length > 1 && mainWindow) {
+          const firstName = workbook.sheets[sheets[0]]?.name || 'Sheet1'
+          const choice = await dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            buttons: ['Cancel', `Save ${firstName}`],
+            defaultId: 0,
+            cancelId: 0,
+            title: 'Save as CSV',
+            message: `CSV files store one sheet. Only "${firstName}" will be saved.`
+          })
+          if (choice.response === 0) {
+            return { ok: false as const, canceled: true as const }
+          }
+        }
+        data = await workbookDataToCsvBuffer(workbook)
+      } else {
+        data = await workbookDataToXlsxBuffer(workbook)
+      }
       await writeFile(filePath, Buffer.from(data))
       return { ok: true as const }
     } catch (error) {

@@ -86,6 +86,10 @@ export default function App(): JSX.Element {
       try {
         const result = await window.api.writeWorkbook(targetPath, snapshot)
         if (!result.ok) {
+          if ('canceled' in result) {
+            setMessage('Save canceled')
+            return false
+          }
           await window.api.showError('Save failed', result.error)
           return false
         }

@@ -2,7 +2,7 @@
 
 A free, local-first desktop spreadsheet app — a clean alternative to Apple Numbers and other tools that convert or corrupt Excel files.
 
-Open Office Excel opens, edits, and saves real **`.xlsx`** workbooks. It never silently changes the file type. Built for everyday spreadsheet work with an Excel-like grid.
+Open Office Excel opens, edits, and saves **`.xlsx`** workbooks and **`.csv`** files. It keeps the format you opened: saving a CSV writes CSV, and saving a workbook writes `.xlsx`. Built for everyday spreadsheet work with an Excel-like grid.
 
 **Stack:** Electron · React · TypeScript · [Univer](https://univer.ai/) · [ExcelJS](https://github.com/exceljs/exceljs)
 
@@ -11,7 +11,8 @@ Open Office Excel opens, edits, and saves real **`.xlsx`** workbooks. It never s
 ## Features
 
 ### Files
-- **New / Open / Save / Save As** for `.xlsx` only
+- **New / Open / Save / Save As** for `.xlsx` and `.csv`
+- CSV is one sheet of values (quotes, commas, and UTF-8 are preserved). Formatting, extra sheets, and formulas stay in `.xlsx`
 - Multi-sheet tabs
 - Unsaved-changes warning on close, New, or Open
 - Shortcuts: `Cmd/Ctrl+N`, `O`, `S`, `Shift+S`
@@ -111,13 +112,15 @@ If this repository publishes Releases, download the installer for your OS from t
 | `npm run preview` | Run the production build |
 | `npm run dist` | Build + package installers into `release/` |
 | `npm run typecheck` | TypeScript check |
-| `npm run test:roundtrip` | Smoke-test `.xlsx` open/save conversion |
+| `npm run test:roundtrip` | Smoke-test `.xlsx` and `.csv` open/save conversion |
 
 ---
 
 ## Sample file
 
 [`fixtures/sample.xlsx`](fixtures/sample.xlsx) includes text, a number, a date, basic formatting, and custom row/column sizes — useful for a quick open/edit/save check.
+
+[`fixtures/sample.csv`](fixtures/sample.csv) is a small comma-separated file with a quoted field, a number, a date, and a boolean.
 
 ---
 
@@ -129,14 +132,16 @@ src/
   preload/     # Secure bridge between main and renderer
   renderer/    # React UI + Univer spreadsheet
   shared/      # IPC channels and workbook types
-fixtures/      # Sample .xlsx files
+fixtures/      # Sample .xlsx and .csv files
 ```
 
 ---
 
 ## Design notes
 
-- Files are always written as `.xlsx` (OOXML). The app does not convert to Numbers, CSV, or other formats on save.
+- Saving keeps the current extension. **Save As** can switch between `.xlsx` and `.csv`.
+- A CSV save writes the first sheet as UTF-8 text. Dates are `YYYY-MM-DD`. Other sheets are omitted after a confirmation.
+- The app does not convert to Numbers or legacy `.xls`.
 - Univer’s official import/export is server/Pro-oriented. This app uses **ExcelJS** in the Electron main process and maps to Univer’s in-memory workbook snapshot, so everything stays local and free.
 
 ---

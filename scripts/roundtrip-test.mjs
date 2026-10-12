@@ -33,7 +33,13 @@ await esbuild.build({
 })
 
 const require = createRequire(import.meta.url)
-const { xlsxBufferToWorkbookData, workbookDataToXlsxBuffer, createBlankWorkbookData } = require(outfile)
+const {
+  xlsxBufferToWorkbookData,
+  workbookDataToXlsxBuffer,
+  csvBufferToWorkbookData,
+  workbookDataToCsvBuffer,
+  createBlankWorkbookData
+} = require(outfile)
 
 const buf = readFileSync(samplePath)
 const data = await xlsxBufferToWorkbookData(buf, 'sample.xlsx')
@@ -52,3 +58,32 @@ console.log('roundtrip bytes', out.length)
 const blankOut = await workbookDataToXlsxBuffer(createBlankWorkbookData())
 writeFileSync(join(tmpdir(), 'blank.xlsx'), blankOut)
 console.log('blank ok', blankOut.length)
+
+const csvPath = join(root, 'fixtures/sample.csv')
+const csvData = await csvBufferToWorkbookData(readFileSync(csvPath), 'sample.csv')
+const csvSheet = csvData.sheets[csvData.sheetOrder[0]]
+const csvA2 = csvSheet.cellData[1]?.[0]?.v
+const csvB2 = csvSheet.cellData[1]?.[1]?.v
+const csvC2 = csvSheet.cellData[1]?.[2]?.v
+const csvD2 = csvSheet.cellData[1]?.[3]?.v
+const csvE2 = csvSheet.cellData[1]?.[4]?.v
+console.log('csv', { csvA2, csvB2, csvC2, csvD2, csvE2 })
+if (csvA2 !== 'Hello' || csvB2 !== 1234.5 || csvC2 !== 'Quoted, value' || csvE2 !== true) {
+  throw new Error(`CSV open mismatch: ${JSON.stringify({ csvA2, csvB2, csvC2, csvD2, csvE2 })}`)
+}
+if (typeof csvD2 !== 'number') {
+  throw new Error(`CSV date was not parsed as a number: ${csvD2}`)
+}
+
+const csvOut = Buffer.from(await workbookDataToCsvBuffer(csvData)).toString('utf8')
+if (
+  !csvOut.startsWith('\uFEFF') ||
+  !csvOut.includes('Hello') ||
+  !csvOut.includes('Quoted, value') ||
+  !csvOut.includes('1234.5') ||
+  !csvOut.includes('2026-07-25')
+) {
+  throw new Error(`CSV save mismatch:\n${csvOut}`)
+}
+writeFileSync(join(tmpdir(), 'sample-ooe-roundtrip.csv'), csvOut)
+console.log('csv roundtrip ok')
